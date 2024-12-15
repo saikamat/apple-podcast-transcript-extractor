@@ -9,7 +9,7 @@ This script extracts transcripts from the Podcasts app on macOS.
 
 ## Usage
 
-Note: You need to download the desired podcast episode before you can extract the transcript.
+Note: You need to download the desired podcast episode(s) before you can extract the transcript.
 
 ### Batch Mode
 To process all TTML files in your Apple Podcasts cache:
