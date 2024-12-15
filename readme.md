@@ -20,7 +20,7 @@ node extractTranscript.js [--timestamps]
 This will:
 1. Find all TTML files in `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML`
 2. Create a `./transcripts` directory
-3. Save each transcript as `./transcripts/<PodcastContentID>.txt`
+3. Save each transcript as `./transcripts/<short_episode_id>.txt`
 
 ### Timestamps Option
 Add `--timestamps` to include timestamps for each paragraph in the format `[HH:MM:SS]`.
