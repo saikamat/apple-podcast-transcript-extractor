@@ -38,7 +38,7 @@ node extractTranscript.js <input_file> <output_file> [--timestamps]
 
 ## Where does the input file come from?
 
-The input file comes from the `transcript_<long_episode_id>.ttml` file in the `Library/Cache/Assets/TTML/PodcastContent<short_episode_id>` directory.
+The input file comes from the `transcript_<long_episode_id>.ttml` file in the `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML/PodcastContent<short_episode_id>` directory.
 
 ## How do I get the episode IDs?
 
