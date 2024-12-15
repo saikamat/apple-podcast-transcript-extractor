@@ -5,11 +5,7 @@ This script extracts transcripts from Apple Podcasts.
 ## Installation
 
 1. Clone the repository
-2. Install dependencies:
-
-```bash
-npm install
-```
+2. Install dependencies: `npm install`
 
 ## Usage
 
