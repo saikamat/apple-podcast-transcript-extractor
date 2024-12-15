@@ -1,0 +1,17 @@
+# Node modules
+node_modules/
+
+# Output directory
+transcripts/
+
+# macOS system files
+.DS_Store
+
+# Environment variables
+.env
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
