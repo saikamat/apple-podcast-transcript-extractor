@@ -105,8 +105,19 @@ if (process.argv.length >= 4 && !includeTimestamps) {
 	const ttmlFiles = findTTMLFiles(ttmlBaseDir)
 
 	console.log(`Found ${ttmlFiles.length} TTML files`)
+
+	// Create a map to track filename occurrences
+	const filenameCounts = new Map()
+
 	ttmlFiles.forEach((file) => {
-		const outputPath = path.join("./transcripts", `${file.id}.txt`)
+		const baseFilename = file.id
+		const count = filenameCounts.get(baseFilename) || 0
+		const suffix = count === 0 ? "" : `-${count}`
+		const outputPath = path.join("./transcripts", `${baseFilename}${suffix}.txt`)
+
+		// Increment the count for this filename
+		filenameCounts.set(baseFilename, count + 1)
+
 		const data = fs.readFileSync(file.path, "utf8")
 		extractTranscript(data, outputPath, includeTimestamps)
 	})
