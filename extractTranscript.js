@@ -113,7 +113,12 @@ if (process.argv.length >= 4 && !includeTimestamps) {
 		const baseFilename = file.id
 		const count = filenameCounts.get(baseFilename) || 0
 		const suffix = count === 0 ? "" : `-${count}`
-		const outputPath = path.join("./transcripts", `${baseFilename}${suffix}.txt`)
+		const podcastFolder = path.join("./transcripts", baseFilename);
+		if (!fs.existsSync(podcastFolder)) {
+			fs.mkdirSync(podcastFolder);
+		}
+		const outputPath = path.join(podcastFolder, `${baseFilename}${suffix}.txt`)
+		// const outputPath = path.join("./transcripts", `${baseFilename}${suffix}.txt`)
 
 		// Increment the count for this filename
 		filenameCounts.set(baseFilename, count + 1)
