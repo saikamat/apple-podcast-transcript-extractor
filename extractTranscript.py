@@ -2,6 +2,11 @@ import os
 import re
 import argparse
 import xml.etree.ElementTree as ET
+from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def format_timestamp(seconds):
@@ -59,6 +64,17 @@ def find_ttml_files(directory):
     return ttml_files
 
 
+
+def summarize_transcript(transcript):
+    response = client.chat.completions.create(model="gpt-4",  # Use "gpt-4" if you have access
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant that summarizes podcast transcripts."},
+        {"role": "user", "content": f"Summarize the following podcast transcript in bullet points:\n\n{transcript}"}
+    ],
+    max_tokens=200)
+    return response.choices[0].message.content.strip()
+
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Extract transcripts from TTML files.")
@@ -101,6 +117,13 @@ def main():
             with open(file["path"], "r", encoding="utf-8") as f:
                 ttml_content = f.read()
             extract_transcript(ttml_content, output_path, args.timestamps)
+
+        transcript = open(output_path, "r", encoding="utf-8").read()
+        summary = summarize_transcript(transcript)
+        summary_path = os.path.join(output_dir, f"{base_filename}{suffix}_summary.txt")
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write(summary)
+        print(f"Summary saved to {summary_path}")
 
 
 if __name__ == "__main__":
