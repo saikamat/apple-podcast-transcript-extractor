@@ -5,6 +5,8 @@ from flask import Flask, request, render_template, redirect, flash, jsonify
 from openai import OpenAI
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+import time
+from openai import RateLimitError
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -61,15 +63,34 @@ def extract_transcript(ttml_content, include_timestamps=False):
         return f"Error parsing TTML file: {e}"
 
 def summarize_transcript(transcript):
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that summarizes podcast transcripts."},
-            {"role": "user", "content": f"Summarize the following podcast transcript in bullet points:\n\n{transcript}"}
-        ],
-        max_tokens=200
-    )
-    return response.choices[0].message.content.strip()
+    max_chunk_size = 2000  # Adjust this value based on your token limit
+    transcript_chunks = [transcript[i:i + max_chunk_size] for i in range(0, len(transcript), max_chunk_size)]
+    summaries = []
+
+    for chunk in transcript_chunks:
+        retry_count = 0
+        while retry_count < 5:  # Retry up to 5 times
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that summarizes podcast transcripts."},
+                        {"role": "user", "content": f"Summarize the following podcast transcript in bullet points:\n\n{chunk}"}
+                    ],
+                    max_tokens=200
+                )
+                summaries.append(response.choices[0].message.content.strip())
+                break  # Exit the retry loop if successful
+            except RateLimitError as e:
+                retry_count += 1
+                wait_time = 2 ** retry_count  # Exponential backoff
+                print(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                break
+
+    return "\n\n".join(summaries)
 
 @app.route('/')
 def index():
