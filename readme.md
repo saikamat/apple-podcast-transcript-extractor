@@ -38,8 +38,9 @@ This is a Flask web application that allows users to upload TTML files, extract 
     ```
 2. Open your web browser and go to `http://127.0.0.1:5000/`.
 3. Upload a TTML file from the `uploads` folder.
+![image](./assets/upload.png)
 4. The application will extract the transcript, summarize it, and display the summary.
-
+![image](./assets/summary.png)
 ## Architecture Diagram
 
 ```mermaid
