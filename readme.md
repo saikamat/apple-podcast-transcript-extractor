@@ -36,13 +36,9 @@ This is a Flask web application that allows users to upload TTML files, extract 
     ```sh
     python app.py
     ```
-2. Start the monitoring application in a different terminal
-    ```sh
-    python monitor_ttml.py
-    ```
-3. Open your web browser and go to `http://127.0.0.1:5000/`.
-4. Upload a TTML file from the `uploads` folder.
-5. The application will extract the transcript, summarize it, and display the summary.
+2. Open your web browser and go to `http://127.0.0.1:5000/`.
+3. Upload a TTML file from the `uploads` folder.
+4. The application will extract the transcript, summarize it, and display the summary.
 
 ## Architecture Diagram
 

@@ -1,7 +1,6 @@
 import os
-# import re
+import subprocess
 import xml.etree.ElementTree as ET
-# from flask import Flask, request, render_template, redirect, url_for, flash
 from flask import Flask, request, render_template, redirect, flash, jsonify
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -12,9 +11,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = Flask(__name__)
+# Start monitor_ttml.py as a background process
+subprocess.Popen(["python", "monitor_ttml.py"])
+
 app.secret_key = 'supersecretkey'
 app.config['UPLOAD_FOLDER'] = './uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'ttml'}
+
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
