@@ -1,7 +1,8 @@
 import os
-import re
+# import re
 import xml.etree.ElementTree as ET
-from flask import Flask, request, render_template, redirect, url_for, flash
+# from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, flash, jsonify
 from openai import OpenAI
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -93,6 +94,25 @@ def upload_file():
     else:
         flash('Invalid file type')
         return redirect(request.url)
+    
+@app.route('/upload_api', methods=['POST'])
+def upload_api():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            ttml_content = f.read()
+        transcript = extract_transcript(ttml_content)
+        summary = summarize_transcript(transcript)
+        return jsonify({"summary": summary})
+    else:
+        return jsonify({"error": "Invalid file type"}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
