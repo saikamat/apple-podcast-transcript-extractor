@@ -56,6 +56,17 @@ def extract_transcript(ttml_content, include_timestamps=False):
     except ET.ParseError as e:
         return f"Error parsing TTML file: {e}"
 
+def summarize_transcript(transcript):
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant that summarizes podcast transcripts."},
+            {"role": "user", "content": f"Summarize the following podcast transcript in bullet points:\n\n{transcript}"}
+        ],
+        max_tokens=200
+    )
+    return response.choices[0].message.content.strip()
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -77,7 +88,8 @@ def upload_file():
             ttml_content = f.read()
         include_timestamps = 'timestamps' in request.form
         transcript = extract_transcript(ttml_content, include_timestamps)
-        return render_template('result.html', transcript=transcript)
+        summary = summarize_transcript(transcript)
+        return render_template('result.html', transcript=summary)
     else:
         flash('Invalid file type')
         return redirect(request.url)
