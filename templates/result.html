@@ -3,11 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript Result</title>
+    <title>Transcript Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .transcript {
+            white-space: pre-wrap; /* This will ensure the text wraps */
+            word-wrap: break-word; /* This will break long words */
+            max-width: 100%; /* Ensure it doesn't overflow the window */
+        }
+    </style>
 </head>
 <body>
-    <h1>Transcript Result</h1>
-    <pre>{{ transcript }}</pre>
-    <a href="{{ url_for('index') }}">Upload another file</a>
+    <h1>Transcript Summary</h1>
+    <div class="transcript">
+        {{ transcript }}
+    </div>
+    <a href="/">Go back</a>
 </body>
 </html>
