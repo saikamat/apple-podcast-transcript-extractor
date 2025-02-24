@@ -11,7 +11,7 @@ This is a Flask web application that allows users to upload TTML files, extract 
 1. Clone the repository:
     ```sh
     git clone https://github.com/saikamat/podcast-transcript-extractor.git
-    cd podcast-transcript-extractor
+    cd apple-podcast-transcript-extractor
     ```
 
 2. Create a virtual environment and activate it:
