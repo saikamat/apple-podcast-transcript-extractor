@@ -1,3 +1,4 @@
+# app.py
 import os
 import subprocess
 import xml.etree.ElementTree as ET
@@ -10,6 +11,9 @@ from openai import RateLimitError
 import logging
 import traceback
 from datetime import datetime
+import hashlib
+import json
+from functools import lru_cache
 
 # Set up logging
 logging.basicConfig(
@@ -56,6 +60,16 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
         logging.info(f"Created upload directory: {app.config['UPLOAD_FOLDER']}")
     except Exception as e:
         logging.error(f"Failed to create upload directory: {str(e)}")
+        raise
+
+# Set up cache directory
+CACHE_DIR = os.path.join(os.path.dirname(__file__), 'cache')
+if not os.path.exists(CACHE_DIR):
+    try:
+        os.makedirs(CACHE_DIR)
+        logging.info(f"Created cache directory: {CACHE_DIR}")
+    except Exception as e:
+        logging.error(f"Failed to create cache directory: {str(e)}")
         raise
 
 # Start monitor_ttml.py as a background process
@@ -181,6 +195,67 @@ def summarize_transcript(transcript):
     logging.info(f"Completed transcript summarization with {len(summaries)} summary sections")
     return result
 
+# Caching functions
+def get_file_hash(content):
+    """Generate a unique hash for file content."""
+    return hashlib.md5(content.encode('utf-8')).hexdigest()
+
+def get_cache_path(file_hash):
+    """Get the path to the cache file for a given hash."""
+    return os.path.join(CACHE_DIR, f"{file_hash}.json")
+
+def save_to_cache(file_hash, transcript, summary, include_timestamps=False):
+    """Save processing results to cache."""
+    try:
+        cache_data = {
+            'transcript': transcript,
+            'summary': summary,
+            'timestamp': time.time(),
+            'include_timestamps': include_timestamps
+        }
+
+        with open(get_cache_path(file_hash), 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f)
+
+        logging.info(f"Saved results to cache for hash: {file_hash}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to save to cache: {str(e)}")
+        return False
+
+def get_from_cache(file_hash):
+    """Retrieve processing results from cache if available."""
+    cache_path = get_cache_path(file_hash)
+
+    if not os.path.exists(cache_path):
+        logging.info(f"No cache found for hash: {file_hash}")
+        return None
+
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            cache_data = json.load(f)
+
+        # Optional: Check if cache is too old (e.g., older than 30 days)
+        cache_age = time.time() - cache_data.get('timestamp', 0)
+        if cache_age > 30 * 24 * 60 * 60:  # 30 days in seconds
+            logging.info(f"Cache expired for hash: {file_hash}")
+            return None
+
+        logging.info(f"Retrieved results from cache for hash: {file_hash}")
+        return cache_data
+    except Exception as e:
+        logging.error(f"Failed to read from cache: {str(e)}")
+        return None
+
+# Memory-based cache for frequently accessed results
+@lru_cache(maxsize=50)
+def get_cached_summary_memory(file_hash):
+    """In-memory cache for the most recently accessed summaries."""
+    cache_data = get_from_cache(file_hash)
+    if cache_data:
+        return cache_data.get('summary')
+    return None
+
 @app.route('/')
 def index():
     """Render the main page."""
@@ -189,7 +264,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handle file upload from web interface."""
+    """Handle file upload from web interface with caching."""
     logging.info("File upload initiated")
 
     # Check if file part exists in request
@@ -219,16 +294,39 @@ def upload_file():
             with open(file_path, 'r', encoding='utf-8') as f:
                 ttml_content = f.read()
 
-            # Process file
+            # Get user preferences
             include_timestamps = 'timestamps' in request.form
+
+            # Generate hash for caching
+            file_hash = get_file_hash(ttml_content)
+            logging.info(f"File hash: {file_hash}")
+
+            # Check cache first
+            cached_data = get_from_cache(file_hash)
+            if cached_data:
+                logging.info(f"Using cached results for {filename}")
+
+                # Check if the cached version matches the timestamp preference
+                cached_timestamps = cached_data.get('include_timestamps', False)
+
+                if include_timestamps == cached_timestamps:
+                    summary = cached_data.get('summary')
+                    return render_template('result.html', transcript=summary, from_cache=True)
+                else:
+                    logging.info(f"Timestamp preference differs from cache, reprocessing")
+
+            # Process file if not in cache or timestamps setting differs
             logging.info(f"Processing file with timestamps: {include_timestamps}")
 
             # Extract and summarize transcript
             transcript = extract_transcript(ttml_content, include_timestamps)
             summary = summarize_transcript(transcript)
 
+            # Save to cache
+            save_to_cache(file_hash, transcript, summary, include_timestamps)
+
             logging.info(f"Successfully processed file: {filename}")
-            return render_template('result.html', transcript=summary)
+            return render_template('result.html', transcript=summary, from_cache=False)
 
         except Exception as e:
             error_msg = f"Error processing file {file.filename}: {str(e)}"
@@ -243,7 +341,7 @@ def upload_file():
 
 @app.route('/upload_api', methods=['POST'])
 def upload_api():
-    """Handle file upload from API."""
+    """Handle file upload from API with caching."""
     logging.info("API upload initiated")
 
     # Check if file part exists in request
@@ -271,12 +369,36 @@ def upload_api():
             with open(file_path, 'r', encoding='utf-8') as f:
                 ttml_content = f.read()
 
-            # Process file
-            transcript = extract_transcript(ttml_content)
+            # Get user preferences from request
+            include_timestamps = request.form.get('timestamps', 'false').lower() == 'true'
+
+            # Generate hash for caching
+            file_hash = get_file_hash(ttml_content)
+            logging.info(f"File hash: {file_hash}")
+
+            # Check cache first
+            cached_data = get_from_cache(file_hash)
+            if cached_data:
+                logging.info(f"API using cached results for {filename}")
+
+                # Check if the cached version matches the timestamp preference
+                cached_timestamps = cached_data.get('include_timestamps', False)
+
+                if include_timestamps == cached_timestamps:
+                    summary = cached_data.get('summary')
+                    return jsonify({"summary": summary, "from_cache": True})
+                else:
+                    logging.info(f"API timestamp preference differs from cache, reprocessing")
+
+            # Process file if not in cache or timestamps setting differs
+            transcript = extract_transcript(ttml_content, include_timestamps)
             summary = summarize_transcript(transcript)
 
+            # Save to cache
+            save_to_cache(file_hash, transcript, summary, include_timestamps)
+
             logging.info(f"API successfully processed file: {filename}")
-            return jsonify({"summary": summary})
+            return jsonify({"summary": summary, "from_cache": False})
 
         except Exception as e:
             error_msg = f"API error processing file {file.filename}: {str(e)}"
@@ -286,6 +408,49 @@ def upload_api():
     else:
         logging.warning(f"API invalid file type: {file.filename}")
         return jsonify({"error": "Invalid file type"}), 400
+
+@app.route('/cache/stats', methods=['GET'])
+def cache_stats():
+    """View cache statistics."""
+    try:
+        if not os.path.exists(CACHE_DIR):
+            return jsonify({"error": "Cache directory does not exist"}), 404
+
+        cache_files = [f for f in os.listdir(CACHE_DIR) if f.endswith('.json')]
+        total_size = sum(os.path.getsize(os.path.join(CACHE_DIR, f)) for f in cache_files)
+
+        stats = {
+            "cache_entries": len(cache_files),
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "cache_directory": CACHE_DIR
+        }
+
+        logging.info(f"Cache stats: {len(cache_files)} entries, {stats['total_size_mb']} MB")
+        return jsonify(stats)
+    except Exception as e:
+        logging.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/cache/clear', methods=['POST'])
+def clear_cache():
+    """Clear the cache."""
+    try:
+        if not os.path.exists(CACHE_DIR):
+            return jsonify({"error": "Cache directory does not exist"}), 404
+
+        cache_files = [f for f in os.listdir(CACHE_DIR) if f.endswith('.json')]
+        for file in cache_files:
+            os.remove(os.path.join(CACHE_DIR, file))
+
+        # Also clear the in-memory cache
+        get_cached_summary_memory.cache_clear()
+
+        logging.info(f"Cleared {len(cache_files)} cache entries")
+        return jsonify({"message": f"Cleared {len(cache_files)} cache entries"})
+    except Exception as e:
+        logging.error(f"Error clearing cache: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
@@ -310,11 +475,15 @@ def health_check():
         logging.error(f"Health check - OpenAI API error: {str(e)}")
         api_status = "error"
 
+    # Check cache directory
+    cache_status = "ok" if os.path.exists(CACHE_DIR) else "error"
+
     return jsonify({
-        "status": "ok" if api_status == "ok" else "degraded",
+        "status": "ok" if api_status == "ok" and cache_status == "ok" else "degraded",
         "timestamp": datetime.now().isoformat(),
         "components": {
-            "openai_api": api_status
+            "openai_api": api_status,
+            "cache": cache_status
         }
     })
 
