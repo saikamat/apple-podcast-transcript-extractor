@@ -4,24 +4,147 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload TTML File</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        form {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .progress-container {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .progress-text {
+            margin-top: 10px;
+            color: #666;
+        }
+        
+        .flash-messages {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        .flash-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
     <h1>Upload TTML File</h1>
-    <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <label>
-            <input type="checkbox" name="timestamps"> Include Timestamps
-        </label>
-        <button type="submit">Upload</button>
-    </form>
+    
     {% with messages = get_flashed_messages() %}
         {% if messages %}
-            <ul>
+            <ul class="flash-messages">
                 {% for message in messages %}
-                    <li>{{ message }}</li>
+                    <li class="flash-message">{{ message }}</li>
                 {% endfor %}
             </ul>
         {% endif %}
     {% endwith %}
+    
+    <form id="upload-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file-upload">Select TTML File:</label>
+            <input type="file" id="file-upload" name="file" accept=".ttml">
+        </div>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="timestamps"> Include Timestamps
+            </label>
+        </div>
+        
+        <button type="submit" id="submit-button">Upload and Process</button>
+    </form>
+    
+    <div class="progress-container" id="progress-container">
+        <div class="loader"></div>
+        <p class="progress-text">Processing your transcript. This may take a few minutes...</p>
+    </div>
+    
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            // Check if a file was selected
+            const fileInput = document.getElementById('file-upload');
+            if (fileInput.files.length === 0) {
+                e.preventDefault(); // Prevent form submission
+                alert('Please select a file to upload.');
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('submit-button').disabled = true;
+            document.getElementById('submit-button').innerText = 'Processing...';
+        });
+    </script>
 </body>
 </html>

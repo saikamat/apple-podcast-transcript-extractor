@@ -7,20 +7,62 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
         }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
         .transcript {
-            white-space: pre-wrap; /* This will ensure the text wraps */
-            word-wrap: break-word; /* This will break long words */
-            max-width: 100%; /* Ensure it doesn't overflow the window */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-width: 100%;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .back-button {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 10px 15px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        
+        .back-button:hover {
+            background-color: #2980b9;
+        }
+        
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <h1>Transcript Summary</h1>
+    
+    <div class="success-message">
+        Your transcript has been successfully processed!
+    </div>
+    
     <div class="transcript">
         {{ transcript }}
     </div>
-    <a href="/">Go back</a>
+    
+    <a href="/" class="back-button">Process Another File</a>
 </body>
 </html>
