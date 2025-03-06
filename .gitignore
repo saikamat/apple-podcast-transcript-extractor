@@ -18,3 +18,4 @@ self-notes.md
 *.swo
 *.ttml
 *.pyc
+*.log
