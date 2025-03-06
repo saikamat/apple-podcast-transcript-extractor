@@ -17,3 +17,4 @@ self-notes.md
 *.swp
 *.swo
 *.ttml
+*.pyc

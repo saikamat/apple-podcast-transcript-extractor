@@ -63,32 +63,46 @@ def extract_transcript(ttml_content, include_timestamps=False):
         return f"Error parsing TTML file: {e}"
 
 def summarize_transcript(transcript):
-    max_chunk_size = 2000  # Adjust this value based on your token limit
+    # Use fewer, larger chunks with a more efficient strategy
+    max_chunk_size = 4000  # Larger chunks mean fewer API calls
     transcript_chunks = [transcript[i:i + max_chunk_size] for i in range(0, len(transcript), max_chunk_size)]
+
+    # Add a delay between initial requests to avoid hitting rate limits immediately
     summaries = []
 
-    for chunk in transcript_chunks:
+    for i, chunk in enumerate(transcript_chunks):
+        # Add initial delay between chunks to avoid immediate rate limiting
+        if i > 0:
+            time.sleep(3)  # Wait 3 seconds between initial requests
+
         retry_count = 0
-        while retry_count < 5:  # Retry up to 5 times
+        max_retries = 8  # Increase max retries
+        success = False
+
+        while retry_count < max_retries and not success:
             try:
                 response = client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-3.5-turbo",  # Consider using a model with higher rate limits
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant that summarizes podcast transcripts."},
                         {"role": "user", "content": f"Summarize the following podcast transcript in bullet points:\n\n{chunk}"}
                     ],
-                    max_tokens=200
+                    max_tokens=300
                 )
                 summaries.append(response.choices[0].message.content.strip())
-                break  # Exit the retry loop if successful
+                success = True
             except RateLimitError as e:
                 retry_count += 1
-                wait_time = 2 ** retry_count  # Exponential backoff
-                print(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+                wait_time = min(60, 2 ** retry_count)  # Cap at 60 seconds max wait
+                print(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {retry_count}/{max_retries})")
                 time.sleep(wait_time)
             except Exception as e:
                 print(f"An error occurred: {e}")
                 break
+
+        # If we've exhausted retries, add a placeholder
+        if not success:
+            summaries.append("*[This section could not be summarized due to API limitations]*")
 
     return "\n\n".join(summaries)
 
