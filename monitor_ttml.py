@@ -1,35 +1,48 @@
+# monitor_ttml.py
 import os
 import time
-import requests
+import shutil
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+import logging
 
-UPLOAD_URL = "http://127.0.0.1:5000/upload_api"  # Flask API endpoint for uploading TTML files
+# Configure logging
+logging.basicConfig(
+    filename='monitor.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Directory to monitor for new TTML files
+SOURCE_DIR = os.path.expanduser("~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML")
+# Directory to copy files to for processing
+TARGET_DIR = "./uploads"
 
 class TTMLHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
         if event.src_path.endswith(".ttml"):
-            print(f"New TTML file detected: {event.src_path}")
-            self.upload_ttml(event.src_path)
+            filename = os.path.basename(event.src_path)
+            target_path = os.path.join(TARGET_DIR, filename)
 
-    def upload_ttml(self, file_path):
-        with open(file_path, 'rb') as f:
-            files = {'file': f}
-            response = requests.post(UPLOAD_URL, files=files)
-            if response.status_code == 200:
-                print(f"Successfully uploaded {file_path}")
-            else:
-                print(f"Failed to upload {file_path}: {response.status_code}")
+            try:
+                # Copy file to uploads directory for app.py to process
+                shutil.copy2(event.src_path, target_path)
+                logging.info(f"Copied new TTML file to uploads: {filename}")
+            except Exception as e:
+                logging.error(f"Error copying file {filename}: {str(e)}")
 
 if __name__ == "__main__":
-    ttml_dir = os.path.expanduser("~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML")
+    # Create target directory if it doesn't exist
+    if not os.path.exists(TARGET_DIR):
+        os.makedirs(TARGET_DIR)
+
     event_handler = TTMLHandler()
     observer = Observer()
-    observer.schedule(event_handler, ttml_dir, recursive=True)
+    observer.schedule(event_handler, SOURCE_DIR, recursive=True)
     observer.start()
-    print(f"Monitoring directory: {ttml_dir}")
+    logging.info(f"Monitoring directory: {SOURCE_DIR}")
 
     try:
         while True:

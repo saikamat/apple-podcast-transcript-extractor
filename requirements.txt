@@ -1,6 +1,6 @@
-flask
-openai
-python-dotenv
-requests
-watchdog
-werkzeug
+flask==3.0.3
+openai==1.63.2
+python-dotenv==1.0.1
+requests==2.32.3
+watchdog==6.0.0
+werkzeug==3.0.2

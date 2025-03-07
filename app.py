@@ -1,6 +1,4 @@
-# app.py
 import os
-import subprocess
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, redirect, flash, jsonify
 from openai import OpenAI
@@ -14,6 +12,8 @@ from datetime import datetime
 import hashlib
 import json
 from functools import lru_cache
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 # Set up logging
 logging.basicConfig(
@@ -71,13 +71,6 @@ if not os.path.exists(CACHE_DIR):
     except Exception as e:
         logging.error(f"Failed to create cache directory: {str(e)}")
         raise
-
-# Start monitor_ttml.py as a background process
-try:
-    monitor_process = subprocess.Popen(["python", "monitor_ttml.py"])
-    logging.info("Started monitor_ttml.py background process")
-except Exception as e:
-    logging.error(f"Failed to start monitor_ttml.py: {str(e)}")
 
 def allowed_file(filename):
     """Check if the file has an allowed extension."""
@@ -256,6 +249,48 @@ def get_cached_summary_memory(file_hash):
         return cache_data.get('summary')
     return None
 
+# File watcher for the uploads directory
+class UploadsHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith(".ttml"):
+            logging.info(f"New file detected in uploads: {event.src_path}")
+            self.process_file(event.src_path)
+
+    def process_file(self, file_path):
+        try:
+            filename = os.path.basename(file_path)
+            logging.info(f"Processing file: {filename}")
+
+            # Read file content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                ttml_content = f.read()
+
+            # Generate hash for caching
+            file_hash = get_file_hash(ttml_content)
+            logging.info(f"File hash: {file_hash}")
+
+            # Check if already processed (default without timestamps)
+            cached_data = get_from_cache(file_hash)
+            if cached_data:
+                logging.info(f"File already processed: {filename}")
+                return
+
+            # Process file
+            include_timestamps = False  # Default setting
+            transcript = extract_transcript(ttml_content, include_timestamps)
+            summary = summarize_transcript(transcript)
+
+            # Save to cache
+            save_to_cache(file_hash, transcript, summary, include_timestamps)
+
+            logging.info(f"Successfully processed file: {filename}")
+        except Exception as e:
+            error_msg = f"Error processing file {file_path}: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+
 @app.route('/')
 def index():
     """Render the main page."""
@@ -339,76 +374,6 @@ def upload_file():
         flash('Invalid file type')
         return redirect(request.url)
 
-@app.route('/upload_api', methods=['POST'])
-def upload_api():
-    """Handle file upload from API with caching."""
-    logging.info("API upload initiated")
-
-    # Check if file part exists in request
-    if 'file' not in request.files:
-        logging.warning("API request missing file part")
-        return jsonify({"error": "No file part"}), 400
-
-    file = request.files['file']
-
-    # Check if filename is empty
-    if file.filename == '':
-        logging.warning("API request with empty filename")
-        return jsonify({"error": "No selected file"}), 400
-
-    # Process valid file
-    if file and allowed_file(file.filename):
-        try:
-            # Save file
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            logging.info(f"API file saved: {file_path}")
-
-            # Read file content
-            with open(file_path, 'r', encoding='utf-8') as f:
-                ttml_content = f.read()
-
-            # Get user preferences from request
-            include_timestamps = request.form.get('timestamps', 'false').lower() == 'true'
-
-            # Generate hash for caching
-            file_hash = get_file_hash(ttml_content)
-            logging.info(f"File hash: {file_hash}")
-
-            # Check cache first
-            cached_data = get_from_cache(file_hash)
-            if cached_data:
-                logging.info(f"API using cached results for {filename}")
-
-                # Check if the cached version matches the timestamp preference
-                cached_timestamps = cached_data.get('include_timestamps', False)
-
-                if include_timestamps == cached_timestamps:
-                    summary = cached_data.get('summary')
-                    return jsonify({"summary": summary, "from_cache": True})
-                else:
-                    logging.info(f"API timestamp preference differs from cache, reprocessing")
-
-            # Process file if not in cache or timestamps setting differs
-            transcript = extract_transcript(ttml_content, include_timestamps)
-            summary = summarize_transcript(transcript)
-
-            # Save to cache
-            save_to_cache(file_hash, transcript, summary, include_timestamps)
-
-            logging.info(f"API successfully processed file: {filename}")
-            return jsonify({"summary": summary, "from_cache": False})
-
-        except Exception as e:
-            error_msg = f"API error processing file {file.filename}: {str(e)}"
-            logging.error(error_msg)
-            logging.error(traceback.format_exc())
-            return jsonify({"error": str(e)}), 500
-    else:
-        logging.warning(f"API invalid file type: {file.filename}")
-        return jsonify({"error": "Invalid file type"}), 400
-
 @app.route('/cache/stats', methods=['GET'])
 def cache_stats():
     """View cache statistics."""
@@ -488,5 +453,16 @@ def health_check():
     })
 
 if __name__ == "__main__":
-    logging.info("Starting Flask application")
-    app.run(debug=True)
+    # Start the file watcher for the uploads directory
+    event_handler = UploadsHandler()
+    observer = Observer()
+    observer.schedule(event_handler, app.config['UPLOAD_FOLDER'], recursive=False)
+    observer.start()
+    logging.info(f"Started file watcher for directory: {app.config['UPLOAD_FOLDER']}")
+
+    try:
+        logging.info("Starting Flask application")
+        app.run(debug=True)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
