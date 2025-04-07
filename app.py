@@ -1,3 +1,5 @@
+# podcast_extractor_app.py
+
 import os
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, redirect, flash, jsonify
@@ -14,6 +16,7 @@ import json
 from functools import lru_cache
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from ddtrace import tracer  # Import Datadog tracer
 
 # Set up logging
 logging.basicConfig(
@@ -298,6 +301,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
+@tracer.wrap(name='upload_file')  # Wrap the route with Datadog tracer
 def upload_file():
     """Handle file upload from web interface with caching."""
     logging.info("File upload initiated")
@@ -375,6 +379,7 @@ def upload_file():
         return redirect(request.url)
 
 @app.route('/cache/stats', methods=['GET'])
+@tracer.wrap(name='cache_stats')  # Wrap the route with Datadog tracer
 def cache_stats():
     """View cache statistics."""
     try:
@@ -398,6 +403,7 @@ def cache_stats():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/cache/clear', methods=['POST'])
+@tracer.wrap(name='clear_cache')  # Wrap the route with Datadog tracer
 def clear_cache():
     """Clear the cache."""
     try:
@@ -430,6 +436,7 @@ def internal_server_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/health')
+@tracer.wrap(name='health_check')  # Wrap the route with Datadog tracer
 def health_check():
     """Simple health check endpoint."""
     try:
@@ -465,4 +472,4 @@ if __name__ == "__main__":
         app.run(debug=True, port=8000)
     except KeyboardInterrupt:
         observer.stop()
-    observer.join()
+        observer.join()

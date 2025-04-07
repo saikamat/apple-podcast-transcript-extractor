@@ -29,6 +29,13 @@ This is a Flask web application that allows users to upload TTML files, extract 
     ```plaintext
     OPENAI_API_KEY=your_openai_api_key
     ```
+## Datadog Integration
+1. Install Datadog Agent
+2. Configure the config file for Datadog Agent at 
+   ```
+   /etc/datadog-agent/datadog.yaml # Linux Users
+   ~/.datadog/datadog.yaml # macOS Users
+   ```
 
 ## Running the Application
 
@@ -67,11 +74,20 @@ podcast-transcript-extractor/
 ## Endpoints
 - **GET** /: Renders the upload form.
 - **POST /upload**: Handles the file upload, extracts the transcript, summarizes it, and displays the summary.
+
+## Datadog Metrics
+Check `https://app.datadog.com/` --> `APM` --> `Services`
+![image](./assets/datadog-services.png)
+
+and `Traces`
+![image](./assets/datadog-traces.png)
+
 ## Dependencies
 flask
 openAI
 python-dotenv
 watchdog
 werkzeug
+ddtrace
 ## License
 This project is licensed under the MIT License.

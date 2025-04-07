@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Set environment variables
+# export DD_SERVICE_NAME=podcast_extractor_app
+# export DD_ENV=dev
+# export DD_LOGS_INJECTION=true
+# export DD_TRACE_AGENT_URL=http://localhost:8126
+
 # Start both processes
 echo "Starting Podcast Transcript Extractor..."
 
@@ -13,11 +19,11 @@ python app.py > webapp.log 2>&1 &
 WEBAPP_PID=$!
 echo "Web app started with PID: $WEBAPP_PID"
 
-echo "================================================"
+echo "===="
 echo "Podcast Transcript Extractor running!"
 echo "Web interface available at: http://127.0.0.1:8000"
 echo "Press Ctrl+C to stop all processes"
-echo "================================================"
+echo "===="
 
 # Function to kill processes on exit
 cleanup() {
