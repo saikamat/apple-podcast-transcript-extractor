@@ -15,8 +15,10 @@ self-notes.md
 # Editor directories and files
 .idea/
 .vscode/
+tests/
 *.swp
 *.swo
 *.ttml
 *.pyc
 *.log
+*.bck

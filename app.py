@@ -1,4 +1,4 @@
-# podcast_extractor_app.py
+# /Users/saikamat/Documents/Python_Scripts/apple-podcast-transcript-extractor/app.py
 
 import os
 import xml.etree.ElementTree as ET
@@ -17,6 +17,7 @@ from functools import lru_cache
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from ddtrace import tracer  # Import Datadog tracer
+import sqlite3
 
 # Set up logging
 logging.basicConfig(
@@ -54,7 +55,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", 'supersecretkey')
 app.config['UPLOAD_FOLDER'] = os.getenv("UPLOAD_FOLDER", './uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'ttml'}
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limit upload size to 16MB
+app.config['MAX_CONTENT_LENGTH'] = 0.5 * 1024 * 1024  # Limit upload size to 16MB
 
 # Create upload directory if it doesn't exist
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -74,6 +75,25 @@ if not os.path.exists(CACHE_DIR):
     except Exception as e:
         logging.error(f"Failed to create cache directory: {str(e)}")
         raise
+
+# Initialize SQLite database
+DATABASE = 'podcast_transcripts.db'
+
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS podcast_transcripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            episode_id VARCHAR(255),
+            summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        conn.commit()
+
+# Initialize the database
+init_db()
 
 def allowed_file(filename):
     """Check if the file has an allowed extension."""
@@ -294,6 +314,25 @@ class UploadsHandler(FileSystemEventHandler):
             logging.error(error_msg)
             logging.error(traceback.format_exc())
 
+def insert_summary(episode_id, summary):
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+            INSERT INTO podcast_transcripts (episode_id, summary)
+            VALUES (?, ?)
+            ''', (episode_id, summary))
+            conn.commit()
+            logging.info(f"Summary inserted for episode_id: {episode_id}")
+    except sqlite3.OperationalError as e:
+        # Handle the case where the database is full
+        app.logger.error(f"Database is full: {e}")
+        return "Database is full", 507
+    except Exception as e:
+        app.logger.error(f"Error inserting summary for episode_id: {episode_id}, error: {str(e)}")
+        return "Error inserting summary", 500
+    return None
+
 @app.route('/')
 def index():
     """Render the main page."""
@@ -364,7 +403,14 @@ def upload_file():
             # Save to cache
             save_to_cache(file_hash, transcript, summary, include_timestamps)
 
-            logging.info(f"Successfully processed file: {filename}")
+            # Insert summary into the database
+            with tracer.trace('insert_summary'):
+                db_error = insert_summary(filename, summary)
+                if db_error:
+                    flash(db_error)
+                    return redirect(request.url)
+
+            logging.info(f"Summary inserted for file: {filename}")
             return render_template('result.html', transcript=summary, from_cache=False)
 
         except Exception as e:
@@ -377,30 +423,6 @@ def upload_file():
         logging.warning(f"Invalid file type: {file.filename}")
         flash('Invalid file type')
         return redirect(request.url)
-
-@app.route('/cache/stats', methods=['GET'])
-@tracer.wrap(name='cache_stats')  # Wrap the route with Datadog tracer
-def cache_stats():
-    """View cache statistics."""
-    try:
-        if not os.path.exists(CACHE_DIR):
-            return jsonify({"error": "Cache directory does not exist"}), 404
-
-        cache_files = [f for f in os.listdir(CACHE_DIR) if f.endswith('.json')]
-        total_size = sum(os.path.getsize(os.path.join(CACHE_DIR, f)) for f in cache_files)
-
-        stats = {
-            "cache_entries": len(cache_files),
-            "total_size_bytes": total_size,
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "cache_directory": CACHE_DIR
-        }
-
-        logging.info(f"Cache stats: {len(cache_files)} entries, {stats['total_size_mb']} MB")
-        return jsonify(stats)
-    except Exception as e:
-        logging.error(f"Error getting cache stats: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/cache/clear', methods=['POST'])
 @tracer.wrap(name='clear_cache')  # Wrap the route with Datadog tracer
