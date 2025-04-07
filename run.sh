@@ -15,7 +15,7 @@ echo "Web app started with PID: $WEBAPP_PID"
 
 echo "================================================"
 echo "Podcast Transcript Extractor running!"
-echo "Web interface available at: http://127.0.0.1:5000"
+echo "Web interface available at: http://127.0.0.1:8000"
 echo "Press Ctrl+C to stop all processes"
 echo "================================================"
 
