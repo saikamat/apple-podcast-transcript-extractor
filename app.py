@@ -1,4 +1,3 @@
-# app.py
 import os
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, redirect, flash, jsonify
@@ -16,7 +15,6 @@ from functools import lru_cache
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from ddtrace import tracer  # Import Datadog tracer
-import sqlite3
 import sqlite3
 
 # Set up logging
@@ -55,7 +53,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", 'supersecretkey')
 app.config['UPLOAD_FOLDER'] = os.getenv("UPLOAD_FOLDER", './uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'ttml'}
-app.config['MAX_CONTENT_LENGTH'] = 0.5 * 1024 * 1024  # Limit upload size to 16MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limit upload size to 500KB
 
 # Create upload directory if it doesn't exist
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -314,6 +312,7 @@ class UploadsHandler(FileSystemEventHandler):
             logging.error(error_msg)
             logging.error(traceback.format_exc())
 
+@tracer.wrap(name='insert_summary')  # Wrap the function with Datadog tracer
 def insert_summary(episode_id, summary):
     try:
         with sqlite3.connect(DATABASE) as conn:
