@@ -1,5 +1,4 @@
-# /Users/saikamat/Documents/Python_Scripts/apple-podcast-transcript-extractor/app.py
-
+# app.py
 import os
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, redirect, flash, jsonify
@@ -17,6 +16,7 @@ from functools import lru_cache
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from ddtrace import tracer  # Import Datadog tracer
+import sqlite3
 import sqlite3
 
 # Set up logging
