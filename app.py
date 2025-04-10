@@ -1,3 +1,4 @@
+# app.py
 import os
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, redirect, flash, jsonify
@@ -312,11 +313,23 @@ class UploadsHandler(FileSystemEventHandler):
             logging.error(error_msg)
             logging.error(traceback.format_exc())
 
-@tracer.wrap(name='insert_summary')  # Wrap the function with Datadog tracer
+
 def insert_summary(episode_id, summary):
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
+
+            # Check the current size of the database
+            cursor.execute('SELECT COUNT(*) FROM podcast_transcripts')
+            current_size = cursor.fetchone()[0]
+
+            # Define the maximum size of the database
+            max_size = 7  # Example: 10 rows
+
+            if current_size >= max_size:
+                logging.error(f"Database is full (current size: {current_size}, max size: {max_size})")
+                return "Database is full", 507
+
             cursor.execute('''
             INSERT INTO podcast_transcripts (episode_id, summary)
             VALUES (?, ?)
