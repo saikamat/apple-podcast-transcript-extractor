@@ -36,6 +36,32 @@ This is a Flask web application that allows users to upload TTML files, extract 
    /etc/datadog-agent/datadog.yaml # Linux Users
    ~/.datadog/datadog.yaml # macOS Users
    ```
+    ### Agent Configuration
+    Here I have configured the Datadog Agent as per the following path:-
+    `https://github.com/saikamat/datadog-apm/blob/main/datdog-working-config-process-env.yaml`
+
+    ### Custom Log Configuration
+    My stand-alone python app currently sends all the logs to `app.log`. I want these to be reflected in Datadog.
+    Follow the steps given here which illustrate [how to make datadog listen to logs from custom log files](https://docs.datadoghq.com/agent/logs/?tab=tailfiles#custom-log-collection).
+
+    Below steps are for MacOS configuration:-
+    1. Open ~/.datadog-agent/conf.d
+    2. Create a new folder named `python_scripts.d` since that is the name of my service: `mkdir python_scripts.d`
+    3. In this `python_scripts.d` folder, create a new file named `conf.yaml` to define the log collection configuration.
+    4. Add the following content to the `conf.yaml` file:
+       ```
+       logs:
+         - type: file
+           path: "/path/to/your/app.log"
+           service: "python_scripts"
+           source: "python"
+       ```
+    5. Restart the Datadog Agent to apply the changes:
+        ```bash
+        launchctl stop com.datadoghq.agent
+        launchctl start com.datadoghq.agent
+        ```
+    6. Verify that logs are being sent to Datadog by checking the Datadog Log Explorer.
 
 ## Running the Application
 
@@ -82,12 +108,17 @@ Check `https://app.datadog.com/` --> `APM` --> `Services`
 and `Traces`
 ![image](./assets/datadog-traces.png)
 
+## Datadog Logs
+![image](./assets/app_logs_logged_to_datadog.gif)
+
+
 ## Dependencies
-flask
-openAI
-python-dotenv
-watchdog
-werkzeug
-ddtrace
+- flask
+- openAI
+- python-dotenv
+- watchdog
+- werkzeug
+- ddtrace # for Datadog
+
 ## License
 This project is licensed under the MIT License.
