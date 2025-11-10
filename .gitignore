@@ -3,6 +3,9 @@ node_modules/
 
 # Output directory
 transcripts/
+cache/
+.npm-cache/
+
 
 # macOS system files
 .DS_Store
@@ -18,3 +21,30 @@ self-notes.md
 *.swo
 *.ttml
 *.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Logs and runtime artifacts
+*.log
+uploads/
+
+# Local databases and backups
+*.db
+*.db.bck
+*.sqlite
+*.sqlite3
+
+# Coverage and build artifacts
+.coverage
+coverage.xml
+dist/
+build/
+
+# AWS CDK/SAM outputs
+cdk.out/

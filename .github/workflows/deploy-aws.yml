@@ -1,0 +1,96 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - migration/aws-cloud
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy-dev:
+    if: github.ref == 'refs/heads/migration/aws-cloud'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./aws-cloud/podcast_stack
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: CDK Synth
+        run: |
+          source .venv/bin/activate
+          cdk synth PodcastStackStack-dev
+
+      - name: CDK Deploy Dev
+        run: |
+          source .venv/bin/activate
+          cdk deploy PodcastStackStack-dev --require-approval never
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./aws-cloud/podcast_stack
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: CDK Synth
+        run: |
+          source .venv/bin/activate
+          cdk synth PodcastStackStack-prod
+
+      - name: CDK Deploy Prod
+        run: |
+          source .venv/bin/activate
+          cdk deploy PodcastStackStack-prod --require-approval never
+
+      - name: Run smoke tests (optional)
+        run: |
+          echo "TODO: Add smoke tests"
+

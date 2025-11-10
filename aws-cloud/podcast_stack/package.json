@@ -1,0 +1,15 @@
+{
+  "name": "podcast_stack",
+  "version": "1.0.0",
+  "description": "This directory contains the Infrastructure as Code (IaC) for deploying the podcast transcript summarizer to AWS.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "aws-cdk": "^2.1031.0"
+  }
+}

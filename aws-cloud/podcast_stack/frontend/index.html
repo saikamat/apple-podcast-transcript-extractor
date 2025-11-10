@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast Transcript Summarizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f3ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+        }
+
+        .upload-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .result {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .result.active {
+            display: block;
+        }
+
+        .result-content {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .result-content pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .spinner {
+            display: inline-block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Podcast Transcript Summarizer</h1>
+        <p class="subtitle">Upload your Apple Podcasts TTML files to get instant AI summaries</p>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Click or drag TTML file here</div>
+            <div class="upload-hint">Navigate to: <code>~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML</code></div>
+        </div>
+
+        <input type="file" id="fileInput" accept=".ttml">
+
+        <button id="uploadBtn" onclick="handleUpload()">Upload & Process</button>
+
+        <div class="progress" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div id="progressText">Uploading...</div>
+        </div>
+
+        <div class="result" id="resultContainer"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultContainer = document.getElementById('resultContainer');
+
+        let currentFile = null;
+
+        // Make upload area clickable
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Handle file selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                currentFile = e.target.files[0];
+                uploadArea.textContent = `Selected: ${currentFile.name}`;
+            }
+        });
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                currentFile = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files;
+                uploadArea.textContent = `Selected: ${currentFile.name}`;
+            }
+        });
+
+        async function handleUpload() {
+            if (!currentFile) {
+                alert('Please select a file first');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            progressContainer.classList.add('active');
+            progressFill.style.width = '10%';
+            progressText.textContent = 'Requesting upload URL...';
+
+            try {
+                // Step 1: Get presigned URL
+                const API_ENDPOINT = 'https://h5q65iwa9c.execute-api.us-east-1.amazonaws.com/prod';
+                
+                const presignResponse = await fetch(`${API_ENDPOINT}/presign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentFile.name })
+                });
+
+                const presignData = await presignResponse.json();
+                const jobId = presignData.jobId;
+                
+                progressFill.style.width = '30%';
+                progressText.textContent = 'Uploading file...';
+
+                // Step 2: Upload file to S3
+                await fetch(presignData.uploadUrl, {
+                    method: 'PUT',
+                    body: currentFile,
+                    headers: { 'Content-Type': 'application/xml' }
+                });
+
+                progressFill.style.width = '60%';
+                progressText.textContent = 'Processing transcript...';
+
+                // Step 3: Wait for processing
+                await pollForResult(jobId);
+
+            } catch (error) {
+                showResult('error', `Error: ${error.message}`);
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function pollForResult(jobId) {
+            const maxAttempts = 60; // 5 minutes
+            const API_ENDPOINT = 'https://h5q65iwa9c.execute-api.us-east-1.amazonaws.com/prod';
+
+            for (let i = 0; i < maxAttempts; i++) {
+                await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+                try {
+                    const response = await fetch(`${API_ENDPOINT}/result?jobId=${jobId}`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Done!';
+                        
+                        // Fetch and display summary
+                        await fetchSummary(data.summaryUrl);
+                        return;
+                    } else if (data.status === 'error') {
+                        showResult('error', 'Processing failed');
+                        uploadBtn.disabled = false;
+                        return;
+                    }
+
+                    const progress = 60 + (i / maxAttempts) * 30;
+                    progressFill.style.width = `${progress}%`;
+                    progressText.textContent = `Processing... (${data.status})`;
+
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }
+
+            showResult('error', 'Timeout waiting for result');
+            uploadBtn.disabled = false;
+        }
+
+        async function fetchSummary(summaryUrl) {
+            try {
+                const response = await fetch(summaryUrl);
+                const summary = await response.text();
+                showResult('success', summary);
+            } catch (error) {
+                showResult('error', `Failed to fetch summary: ${error.message}`);
+            }
+        }
+
+        function showResult(type, content) {
+            progressContainer.classList.remove('active');
+            resultContainer.innerHTML = `
+                <div class="status ${type}">
+                    ${type === 'success' ? '✓ Summary Ready!' : '✗ Error'}
+                </div>
+                <div class="result-content">
+                    <pre>${content}</pre>
+                </div>
+                <button onclick="location.reload()">Upload Another File</button>
+            `;
+            resultContainer.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+

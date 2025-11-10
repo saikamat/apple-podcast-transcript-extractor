@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Podcast Transcript Processor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        h1 {
+            color: #333;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .links {
+            margin-top: 10px;
+        }
+        .links a {
+            display: inline-block;
+            margin-right: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AWS Podcast Transcript Processor</h1>
+        <p>Upload a TTML file to extract and summarize podcast transcripts using AWS serverless infrastructure.</p>
+
+        <input type="file" id="fileInput" accept=".ttml">
+        <br>
+        <button id="uploadBtn" onclick="uploadFile()">Upload and Process</button>
+
+        <div id="status"></div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_ENDPOINT = 'https://h5q65iwa9c.execute-api.us-east-1.amazonaws.com/prod';
+        let currentJobId = null;
+        let statusCheckInterval = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function showResult(content) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = content;
+            resultDiv.className = 'result';
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            if (!fileInput.files[0]) {
+                showStatus('Please select a file first.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            uploadBtn.disabled = true;
+            showStatus('Getting upload URL...', 'info');
+            showResult('');
+
+            try {
+                // Step 1: Get presigned URL
+                const presignResponse = await fetch(`${API_ENDPOINT}/presign`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: file.name
+                    })
+                });
+
+                if (!presignResponse.ok) {
+                    throw new Error('Failed to get upload URL');
+                }
+
+                const { jobId, uploadUrl } = await presignResponse.json();
+                currentJobId = jobId;
+
+                showStatus(`Got upload URL. Job ID: ${jobId}<br>Uploading file...`, 'info');
+
+                // Step 2: Upload file to S3
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload file');
+                }
+
+                showStatus(`File uploaded successfully!<br>Job ID: ${jobId}<br>Processing... (this may take 30-60 seconds)`, 'info');
+
+                // Step 3: Poll for results
+                startStatusPolling(jobId);
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function checkStatus(jobId) {
+            try {
+                const response = await fetch(`${API_ENDPOINT}/result?jobId=${jobId}`);
+
+                if (!response.ok) {
+                    throw new Error('Failed to check status');
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    clearInterval(statusCheckInterval);
+                    showStatus(`Processing complete!<br>Status: ${data.status}`, 'success');
+
+                    let resultHTML = `<strong>Job ID:</strong> ${data.jobId}<br>`;
+                    resultHTML += `<strong>Status:</strong> ${data.status}<br>`;
+                    resultHTML += `<strong>Created:</strong> ${new Date(data.createdAt).toLocaleString()}<br>`;
+                    resultHTML += `<strong>Updated:</strong> ${new Date(data.updatedAt).toLocaleString()}<br>`;
+                    resultHTML += `<div class="links">`;
+
+                    if (data.transcriptUrl) {
+                        resultHTML += `<a href="${data.transcriptUrl}" target="_blank">Download Transcript</a>`;
+                    }
+                    if (data.summaryUrl) {
+                        resultHTML += `<a href="${data.summaryUrl}" target="_blank">Download Summary</a>`;
+                    }
+
+                    resultHTML += `</div>`;
+                    showResult(resultHTML);
+
+                    document.getElementById('uploadBtn').disabled = false;
+
+                } else {
+                    showStatus(`Processing...<br>Status: ${data.status}<br>Checking again in 5 seconds...`, 'info');
+                }
+
+            } catch (error) {
+                clearInterval(statusCheckInterval);
+                showStatus(`Error checking status: ${error.message}`, 'error');
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        }
+
+        function startStatusPolling(jobId) {
+            // Check immediately
+            setTimeout(() => checkStatus(jobId), 3000);
+
+            // Then check every 5 seconds
+            statusCheckInterval = setInterval(() => {
+                checkStatus(jobId);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
