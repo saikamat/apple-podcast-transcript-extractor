@@ -241,11 +241,41 @@ See aws-cloud/DEPLOYMENT.md "Testing" section for presigned URL workflow and API
             └── podcast_stack_stack.py
 ```
 
+## AWS Lambda Deployment - Critical Configuration
+
+**IMPORTANT**: Lambda functions require proper dependency bundling and architecture configuration.
+
+### Requirements for each Lambda function:
+1. **requirements.txt** - Must exist in each lambda_functions/*/  directory
+2. **Architecture specification** - `architecture=_lambda.Architecture.X86_64` in CDK stack
+3. **Platform specification** - `platform="linux/amd64"` in bundling options
+4. **Docker** - Must be running for CDK bundling to work
+
+### Common Lambda deployment errors:
+- `Runtime.ImportModuleError: No module named 'openai'` → Missing requirements.txt or bundling not configured
+- `No module named 'pydantic_core._pydantic_core'` → Architecture mismatch (ARM64 vs x86_64)
+
+### CDK Bundling Configuration:
+All Lambda functions in `podcast_stack_stack.py` use:
+```python
+code=_lambda.Code.from_asset(
+    "lambda_functions/function_name",
+    bundling=cdk.BundlingOptions(
+        image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+        command=["bash", "-c", "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"],
+        platform="linux/amd64"  # Critical for x86_64 Lambda runtime
+    )
+)
+```
+
+### Testing AWS Deployment:
+Use `aws-test.html` (in project root) to test the full upload → extract → summarize pipeline via browser.
+
 ## Repository Status
 
 - Current branch: `migration/aws-cloud`
 - Main branch: `main`
-- Status: AWS migration complete but not yet merged to main
+- Status: AWS migration complete and deployed to dev environment
 - Production: Local Flask app (app.py) remains the active implementation
 
 ## Common Workflows

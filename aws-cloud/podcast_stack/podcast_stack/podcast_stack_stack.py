@@ -3,6 +3,7 @@ from aws_cdk import (
     Stack,
     aws_s3 as s3,
     aws_s3_notifications as s3n,
+    aws_s3_deployment as s3deploy,
     aws_dynamodb as dynamodb,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
@@ -10,6 +11,8 @@ from aws_cdk import (
     aws_stepfunctions_tasks as tasks,
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
     Duration,
     RemovalPolicy,
 )
@@ -293,5 +296,63 @@ class PodcastStackStack(Stack):
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(starter_function),
             s3.NotificationKeyFilter(prefix="uploads/")
+        )
+
+        # Create S3 bucket for frontend hosting
+        frontend_bucket = s3.Bucket(
+            self, "FrontendBucket",
+            bucket_name=f"podcast-frontend-{env_name}",
+            removal_policy=RemovalPolicy.DESTROY if not is_prod else RemovalPolicy.RETAIN,
+            auto_delete_objects=not is_prod,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        )
+
+        # Create CloudFront Origin Access Identity
+        oai = cloudfront.OriginAccessIdentity(
+            self, "FrontendOAI",
+            comment=f"OAI for podcast frontend {env_name}"
+        )
+
+        # Grant CloudFront access to the frontend bucket
+        frontend_bucket.grant_read(oai)
+
+        # Create CloudFront distribution
+        distribution = cloudfront.Distribution(
+            self, "FrontendDistribution",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3BucketOrigin.with_origin_access_identity(
+                    frontend_bucket,
+                    origin_access_identity=oai
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+                cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD,
+            ),
+            default_root_object="index.html",
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=404,
+                    response_http_status=200,
+                    response_page_path="/index.html",
+                    ttl=Duration.minutes(5)
+                ),
+                cloudfront.ErrorResponse(
+                    http_status=403,
+                    response_http_status=200,
+                    response_page_path="/index.html",
+                    ttl=Duration.minutes(5)
+                )
+            ],
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+        )
+
+        # Output CloudFront URL
+        cdk.CfnOutput(self, "CloudFrontURL",
+            value=f"https://{distribution.distribution_domain_name}",
+            description="CloudFront distribution URL for frontend"
+        )
+        cdk.CfnOutput(self, "FrontendBucketName",
+            value=frontend_bucket.bucket_name,
+            description="S3 bucket name for frontend files"
         )
 

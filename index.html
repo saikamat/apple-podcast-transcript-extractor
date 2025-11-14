@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast Transcript Processor</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8edff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .upload-text {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .upload-hint {
+            color: #999;
+            font-size: 12px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .file-info.show {
+            display: flex;
+        }
+
+        .file-name {
+            color: #333;
+            font-weight: 500;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
+        .remove-file {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .remove-file:hover {
+            background: #c82333;
+        }
+
+        button.primary-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button.primary-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button.primary-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .progress-container.show {
+            display: block;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #0c5460;
+        }
+
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left: 4px solid #155724;
+        }
+
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #721c24;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+            border: 1px solid #dee2e6;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        .result-item {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .result-item strong {
+            color: #333;
+        }
+
+        .links {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .links a {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .links a:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .upload-area {
+                padding: 30px 15px;
+            }
+
+            .links {
+                flex-direction: column;
+            }
+
+            .links a {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 20px 15px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .subtitle {
+                font-size: 13px;
+            }
+
+            .upload-icon {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content">
+        <div class="container">
+            <h1>Podcast Transcript Processor</h1>
+            <p class="subtitle">
+                Upload TTML files from Apple Podcasts to extract and summarize transcripts using AWS serverless infrastructure
+            </p>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">&#x1F4C4;</div>
+                <div class="upload-text">Click to select a TTML file or drag and drop</div>
+                <div class="upload-hint">Maximum file size: 10 MB</div>
+            </div>
+
+            <input type="file" id="fileInput" accept=".ttml">
+
+            <div class="file-info" id="fileInfo">
+                <div>
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <button class="remove-file" onclick="removeFile()">Remove</button>
+            </div>
+
+            <button class="primary-btn" id="uploadBtn" onclick="uploadFile()">
+                Upload and Process
+            </button>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text" id="progressText">Uploading...</div>
+            </div>
+
+            <div class="status" id="status"></div>
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div>AWS Podcast Transcript Processor</div>
+        <div style="margin-top: 8px; font-size: 12px; opacity: 0.9;">
+            Powered by AWS Lambda, Step Functions, and OpenAI
+        </div>
+    </footer>
+
+    <script>
+        const API_ENDPOINT = 'https://g5oco2erb4.execute-api.us-east-1.amazonaws.com/prod';
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+        let currentJobId = null;
+        let statusCheckInterval = null;
+        let selectedFile = null;
+
+        // DOM elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        // Click to upload
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+
+            if (e.dataTransfer.files[0]) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            // Validate file type
+            if (!file.name.toLowerCase().endsWith('.ttml')) {
+                showStatus('Invalid file type. Please select a TTML file.', 'error');
+                return;
+            }
+
+            // Validate file size
+            if (file.size > MAX_FILE_SIZE) {
+                showStatus(`File is too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024} MB.`, 'error');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+            hideStatus();
+            hideResult();
+        }
+
+        function removeFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            hideStatus();
+            hideResult();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type} show`;
+        }
+
+        function hideStatus() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.classList.remove('show');
+        }
+
+        function showResult(content) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = content;
+            resultDiv.classList.add('show');
+        }
+
+        function hideResult() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.classList.remove('show');
+        }
+
+        function showProgress(text = 'Uploading...', percent = 0) {
+            progressContainer.classList.add('show');
+            progressText.textContent = text;
+            progressBar.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            progressContainer.classList.remove('show');
+        }
+
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+
+        async function uploadFile() {
+            if (!selectedFile) {
+                showStatus('Please select a TTML file first.', 'error');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            hideStatus();
+            hideResult();
+            showProgress('Requesting upload URL...', 10);
+
+            try {
+                // Step 1: Get presigned URL
+                const presignResponse = await fetch(`${API_ENDPOINT}/presign`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: selectedFile.name
+                    })
+                });
+
+                if (!presignResponse.ok) {
+                    const errorData = await presignResponse.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to get upload URL from server');
+                }
+
+                const { jobId, uploadUrl } = await presignResponse.json();
+                currentJobId = jobId;
+
+                showProgress('Uploading file to S3...', 30);
+
+                // Step 2: Upload file to S3
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: selectedFile,
+                    headers: {
+                        'Content-Type': 'application/ttml+xml'
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload file to S3');
+                }
+
+                showProgress('File uploaded! Processing transcript...', 50);
+                showStatus(
+                    `<div class="spinner"></div>File uploaded successfully! Job ID: <strong>${jobId}</strong><br>Processing your transcript... This typically takes 30-60 seconds.`,
+                    'info'
+                );
+
+                // Step 3: Poll for results
+                hideProgress();
+                startStatusPolling(jobId);
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                hideProgress();
+                showStatus(`<strong>Error:</strong> ${error.message}`, 'error');
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function checkStatus(jobId) {
+            try {
+                const response = await fetch(`${API_ENDPOINT}/result?jobId=${jobId}`);
+
+                if (!response.ok) {
+                    throw new Error('Failed to check processing status');
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    clearInterval(statusCheckInterval);
+                    showStatus(`<strong>Success!</strong> Your transcript has been processed and is ready for download.`, 'success');
+
+                    let resultHTML = `
+                        <div class="result-item"><strong>Job ID:</strong> ${data.jobId}</div>
+                        <div class="result-item"><strong>Status:</strong> <span style="color: #28a745;">${data.status}</span></div>
+                        <div class="result-item"><strong>Created:</strong> ${new Date(data.createdAt).toLocaleString()}</div>
+                        <div class="result-item"><strong>Completed:</strong> ${new Date(data.updatedAt).toLocaleString()}</div>
+                    `;
+
+                    if (data.transcriptUrl || data.summaryUrl) {
+                        resultHTML += `<div class="links">`;
+
+                        if (data.transcriptUrl) {
+                            resultHTML += `<a href="${data.transcriptUrl}" target="_blank">&#x1F4C4; Download Full Transcript</a>`;
+                        }
+                        if (data.summaryUrl) {
+                            resultHTML += `<a href="${data.summaryUrl}" target="_blank">&#x1F4DD; Download Summary</a>`;
+                        }
+
+                        resultHTML += `</div>`;
+                    }
+
+                    showResult(resultHTML);
+                    uploadBtn.disabled = false;
+
+                } else if (data.status === 'failed') {
+                    clearInterval(statusCheckInterval);
+                    showStatus(`<strong>Processing Failed:</strong> ${data.error || 'An unknown error occurred during processing.'}`, 'error');
+                    uploadBtn.disabled = false;
+
+                } else {
+                    // Still processing
+                    const statusText = data.status === 'processing' ? 'Processing transcript' :
+                                      data.status === 'extracting' ? 'Extracting text from TTML' :
+                                      data.status === 'summarizing' ? 'Generating AI summary' :
+                                      'Processing';
+
+                    showStatus(
+                        `<div class="spinner"></div>${statusText}...<br>Status: <strong>${data.status}</strong><br><small>Checking again in 5 seconds...</small>`,
+                        'info'
+                    );
+                }
+
+            } catch (error) {
+                console.error('Status check error:', error);
+                clearInterval(statusCheckInterval);
+                showStatus(`<strong>Error:</strong> Failed to check processing status. ${error.message}`, 'error');
+                uploadBtn.disabled = false;
+            }
+        }
+
+        function startStatusPolling(jobId) {
+            // Check after 3 seconds
+            setTimeout(() => checkStatus(jobId), 3000);
+
+            // Then check every 5 seconds
+            statusCheckInterval = setInterval(() => {
+                checkStatus(jobId);
+            }, 5000);
+        }
+
+        // Clear any intervals when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+        });
+    </script>
+</body>
+</html>
