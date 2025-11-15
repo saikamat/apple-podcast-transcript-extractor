@@ -23,28 +23,27 @@ class PodcastStackStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Environment detection (dev vs prod)
-        is_prod = "prod" in construct_id
-        env_name = "prod" if is_prod else "dev"
-        
+        # Production environment configuration
+        env_name = "prod"
+
         # Create S3 bucket for storage
         storage_bucket = s3.Bucket(
             self, "StorageBucket",
             bucket_name=f"podcast-transcripts-{env_name}",
             versioned=True,
-            removal_policy=RemovalPolicy.DESTROY if not is_prod else RemovalPolicy.RETAIN,
-            auto_delete_objects=not is_prod,
+            removal_policy=RemovalPolicy.RETAIN,
+            auto_delete_objects=False,
             lifecycle_rules=[
                 s3.LifecycleRule(
-                    expiration=Duration.days(30 if is_prod else 7),
+                    expiration=Duration.days(30),
                     prefix="uploads/",
                 ),
                 s3.LifecycleRule(
-                    expiration=Duration.days(90 if is_prod else 30),
+                    expiration=Duration.days(90),
                     prefix="transcripts/",
                 ),
                 s3.LifecycleRule(
-                    expiration=Duration.days(180 if is_prod else 90),
+                    expiration=Duration.days(180),
                     prefix="summaries/",
                 ),
             ],
@@ -64,7 +63,7 @@ class PodcastStackStack(Stack):
             self, "JobTable",
             table_name=f"PodcastJobs-{env_name}",
             partition_key=dynamodb.Attribute(name="jobId", type=dynamodb.AttributeType.STRING),
-            removal_policy=RemovalPolicy.DESTROY if not is_prod else RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.RETAIN,
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
         )
 
@@ -107,8 +106,8 @@ class PodcastStackStack(Stack):
                 )
             ),
             role=lambda_role,
-            timeout=Duration.seconds(60 if not is_prod else 120),
-            memory_size=256 if not is_prod else 512,
+            timeout=Duration.seconds(120),
+            memory_size=512,
             environment={
                 "STORAGE_BUCKET": storage_bucket.bucket_name,
                 "JOB_TABLE": job_table.table_name,
@@ -136,7 +135,7 @@ class PodcastStackStack(Stack):
             ),
             role=lambda_role,
             timeout=Duration.seconds(300),
-            memory_size=512 if not is_prod else 1024,
+            memory_size=1024,
             environment={
                 "STORAGE_BUCKET": storage_bucket.bucket_name,
                 "JOB_TABLE": job_table.table_name,
@@ -302,8 +301,8 @@ class PodcastStackStack(Stack):
         frontend_bucket = s3.Bucket(
             self, "FrontendBucket",
             bucket_name=f"podcast-frontend-{env_name}",
-            removal_policy=RemovalPolicy.DESTROY if not is_prod else RemovalPolicy.RETAIN,
-            auto_delete_objects=not is_prod,
+            removal_policy=RemovalPolicy.RETAIN,
+            auto_delete_objects=False,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         )
 

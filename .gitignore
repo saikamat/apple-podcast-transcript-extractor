@@ -48,3 +48,11 @@ build/
 
 # AWS CDK/SAM outputs
 cdk.out/
+.aws-sam/
+
+# Archived Flask app (kept for reference but not tracked for changes)
+# Note: archive/ directory IS tracked but individual runtime files are not
+archive/flask-app/venv/
+archive/flask-app/__pycache__/
+archive/flask-app/*.pyc
+archive/flask-app/.pytest_cache/

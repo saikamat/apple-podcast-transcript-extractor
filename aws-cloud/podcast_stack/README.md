@@ -29,20 +29,15 @@ cdk bootstrap
 aws configure
 ```
 
-4. Set up secrets (dev):
+4. Set up secrets:
 ```bash
 aws secretsmanager create-secret \
-  --name podcast-app/openai-key-dev \
+  --name podcast-app/openai-key-prod \
   --secret-string "your-openai-api-key-here" \
   --region us-east-1
 ```
 
-5. Deploy dev environment:
-```bash
-cdk deploy PodcastStackStack-dev
-```
-
-6. Deploy prod environment:
+5. Deploy production environment:
 ```bash
 cdk deploy PodcastStackStack-prod
 ```

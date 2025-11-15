@@ -1,6 +1,6 @@
 # Deployment Guide: Podcast Transcript Summarizer to AWS
 
-This guide walks you through deploying the podcast transcript summarizer application to AWS using Infrastructure as Code.
+This guide walks you through deploying the podcast transcript summarizer application to AWS as a production serverless application using Infrastructure as Code.
 
 ## Prerequisites
 
@@ -48,17 +48,8 @@ aws sts get-caller-identity
 
 ### 4. Store OpenAI API Key
 
-Create secrets in AWS Secrets Manager:
+Create the secret in AWS Secrets Manager:
 
-**For Dev:**
-```bash
-aws secretsmanager create-secret \
-  --name podcast-app/openai-key-dev \
-  --secret-string '{"OPENAI_API_KEY":"your-key-here"}' \
-  --region us-east-1
-```
-
-**For Prod:**
 ```bash
 aws secretsmanager create-secret \
   --name podcast-app/openai-key-prod \
@@ -72,21 +63,15 @@ Edit `aws-cloud/podcast_stack/app.py` and replace the empty account strings with
 
 ## Deployment
 
-### Deploy Dev Environment
+### Deploy Production Environment
 
 ```bash
 cd aws-cloud/podcast_stack
 source .venv/bin/activate
-cdk deploy PodcastStackStack-dev
+cdk deploy PodcastStackStack-prod
 ```
 
 CDK will show you what resources will be created. Type `y` to proceed.
-
-### Deploy Prod Environment
-
-```bash
-cdk deploy PodcastStackStack-prod
-```
 
 ## Post-Deployment Steps
 
@@ -95,7 +80,7 @@ cdk deploy PodcastStackStack-prod
 After deployment, CDK will output the API endpoint:
 
 ```
-PodcastStackStack-dev:ApiEndpoint = https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/
+PodcastStackStack-prod:ApiEndpoint = https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/
 ```
 
 ### 2. Update Frontend
@@ -129,31 +114,31 @@ curl -X PUT "YOUR_PRESIGNED_URL" \
 curl "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/prod/result?jobId=YOUR_JOB_ID"
 ```
 
-## Environment Differences
+## Production Configuration
 
-| Resource | Dev | Prod |
-|----------|-----|------|
-| S3 Lifecycle | 7 days (uploads), 30 days (transcripts) | 30 days (uploads), 90 days (transcripts), 180 days (summaries) |
-| Lambda Memory | 256MB | 512MB-1024MB |
-| Lambda Timeout | 60-120s | 120-300s |
-| Removal Policy | DESTROY | RETAIN |
-| Logging | DEBUG | INFO |
+| Resource | Configuration |
+|----------|---------------|
+| S3 Lifecycle | 30 days (uploads), 90 days (transcripts), 180 days (summaries) |
+| Extract Lambda | 512MB memory, 120s timeout |
+| Summarize Lambda | 1024MB memory, 300s timeout |
+| Other Lambdas | 256MB memory, 10-30s timeout |
+| Removal Policy | RETAIN (data preserved on stack deletion) |
+| Auto-delete | False (manual cleanup required) |
 
 ## Cleanup
 
-### Destroy Dev Environment
+### Destroy Production Environment
 
-```bash
-cdk destroy PodcastStackStack-dev
-```
-
-### Destroy Prod Environment
+**Warning**: This command will delete the CloudFormation stack but RETAIN S3 buckets and DynamoDB tables due to the RETAIN removal policy.
 
 ```bash
 cdk destroy PodcastStackStack-prod
 ```
 
-**Warning**: This will delete all resources, including data in S3 and DynamoDB.
+To fully clean up:
+1. Empty and delete S3 buckets manually
+2. Delete DynamoDB tables manually
+3. Delete the CloudFormation stack
 
 ## Troubleshooting
 

@@ -1,6 +1,9 @@
-flask
-openai
-python-dotenv
-requests
-watchdog
-werkzeug
+# Minimal requirements for AWS CLI and CDK tools
+# For CDK deployment requirements, see aws-cloud/podcast_stack/requirements.txt
+# For archived Flask app requirements, see archive/flask-app/flask-requirements.txt
+
+# AWS CLI (optional - can also install via package manager)
+awscli>=2.13.0
+
+# Note: AWS CDK is installed via npm globally:
+# npm install -g aws-cdk

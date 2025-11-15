@@ -41,7 +41,7 @@ aws-cloud/
 3. **Store Secrets**
    ```bash
    aws secretsmanager create-secret \
-     --name podcast-app/openai-key-dev \
+     --name podcast-app/openai-key-prod \
      --secret-string '{"OPENAI_API_KEY":"your-key"}'
    ```
 
@@ -53,9 +53,9 @@ aws-cloud/
    cdk bootstrap aws://ACCOUNT-ID/REGION
    ```
 
-6. **Deploy**
+6. **Deploy Production**
    ```bash
-   cdk deploy PodcastStackStack-dev
+   cdk deploy PodcastStackStack-prod
    ```
 
 ## 📚 Documentation
@@ -80,7 +80,7 @@ User → Frontend (S3) → API Gateway → Lambda (Presign) → S3 Upload
 - ✅ Presigned S3 uploads (direct to S3)
 - ✅ Asynchronous processing with Step Functions
 - ✅ Job tracking with DynamoDB
-- ✅ Environment separation (dev/prod)
+- ✅ Production-grade configuration
 - ✅ Automatic cleanup (lifecycle policies)
 - ✅ Cost-optimized for low traffic
 
@@ -107,25 +107,24 @@ For <100 requests/day: **~$5-15/month**
 - ✅ Presigned S3 upload URLs
 - ✅ Asynchronous Step Functions workflow
 - ✅ DynamoDB job tracking
-- ✅ Environment-specific configs (dev/prod)
+- ✅ Production-grade configuration
 - ✅ Secrets Manager for API keys
 - ✅ Modern frontend with drag-and-drop
 
 ## 🚦 Status
 
-✅ Infrastructure code complete  
-✅ Lambda functions implemented  
-✅ Frontend built  
-✅ Documentation created  
-⏳ Ready for deployment  
+✅ Infrastructure code complete
+✅ Lambda functions implemented
+✅ Frontend built
+✅ Documentation created
+✅ Production deployment active
 
 ## 📝 Next Steps
 
-1. Follow [DEPLOYMENT.md](./DEPLOYMENT.md) to deploy
-2. Test with a sample TTML file
-3. Monitor costs and usage
-4. Set up CloudWatch alarms
-5. Deploy to production when ready
+1. Monitor costs and usage via AWS Cost Explorer
+2. Set up CloudWatch alarms (optional)
+3. Configure custom domain (optional)
+4. Add user authentication (optional)
 
 ## ❓ Questions?
 

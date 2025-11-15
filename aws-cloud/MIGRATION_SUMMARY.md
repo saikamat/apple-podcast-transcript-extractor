@@ -2,7 +2,7 @@
 
 ## Migration Overview
 
-This document outlines the cloud migration of the local Flask-based podcast transcript summarizer to a fully serverless AWS architecture.
+This document outlines the cloud migration of the local Flask-based podcast transcript summarizer to a fully serverless AWS production architecture.
 
 ## Architecture Comparison
 
@@ -165,21 +165,16 @@ aws-cloud/
 └── MIGRATION_SUMMARY.md               # This file
 ```
 
-## Environment-Specific Configuration
+## Production Configuration
 
-### Dev Environment
-- Short retention (7-30 days)
-- Lower Lambda memory (256MB)
-- Shorter timeouts
-- DEBUG logging
-- Auto-delete resources
+The serverless architecture uses production-grade settings:
 
-### Prod Environment
-- Longer retention (30-180 days)
-- Higher Lambda memory (512MB-1024MB)
-- Longer timeouts
-- INFO/WARN logging
-- Retain data on destroy
+- S3 retention: 30 days (uploads), 90 days (transcripts), 180 days (summaries)
+- Extract Lambda: 512MB memory, 120s timeout
+- Summarize Lambda: 1024MB memory, 300s timeout
+- Other Lambdas: 256MB memory, 10-30s timeout
+- Removal policy: RETAIN (data preserved on stack deletion)
+- Auto-delete: False (manual cleanup required for safety)
 
 ## Security Enhancements
 
@@ -222,27 +217,25 @@ aws-cloud/
 - [x] Create API Gateway handlers
 - [x] Build frontend UI
 - [x] Create deployment documentation
-- [ ] Configure AWS credentials
-- [ ] Store OpenAI API key in Secrets Manager
-- [ ] Update account ID in app.py
-- [ ] Bootstrap CDK environment
-- [ ] Deploy dev environment
-- [ ] Test end-to-end flow
-- [ ] Deploy prod environment
-- [ ] Set up monitoring/alarms
+- [x] Configure AWS credentials
+- [x] Store OpenAI API key in Secrets Manager
+- [x] Update account ID in app.py
+- [x] Bootstrap CDK environment
+- [x] Deploy production environment
+- [x] Test end-to-end flow
+- [x] Update frontend with API endpoint
+- [x] Simplify to single production environment
+- [ ] Set up monitoring/alarms (optional)
 - [ ] Configure CI/CD (optional)
-- [ ] Update frontend with API endpoint
 
 ## Next Steps
 
-1. **Deploy to Dev**: Follow `DEPLOYMENT.md` to deploy dev environment
-2. **Test Upload Flow**: Upload a test TTML file
-3. **Monitor Costs**: Check AWS Cost Explorer
-4. **Set Up Alarms**: CloudWatch alarms for errors
-5. **Production Deployment**: Deploy prod when dev is stable
-6. **Domain Setup**: Configure custom domain (optional)
-7. **Authentication**: Add user auth if needed (Cognito)
-8. **Analytics**: Add usage tracking
+1. **Monitor Usage**: Check AWS Cost Explorer regularly
+2. **Set Up Alarms**: CloudWatch alarms for errors (optional)
+3. **Domain Setup**: Configure custom domain (optional)
+4. **Authentication**: Add user auth if needed (Cognito)
+5. **Analytics**: Add usage tracking (optional)
+6. **Optimize Costs**: Review and adjust retention policies as needed
 
 ## Rollback Plan
 

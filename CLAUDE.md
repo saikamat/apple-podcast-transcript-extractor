@@ -4,35 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A podcast transcript extractor and summarizer that processes Apple Podcasts TTML files. The project has two architectures:
-1. **Local Flask app** (app.py) - Original implementation for local development
-2. **AWS serverless** (aws-cloud/) - Cloud migration using AWS CDK, Lambda, Step Functions, and S3
+A cloud-native serverless podcast transcript extractor and summarizer that processes Apple Podcasts TTML files.
 
-**Limitation**: Requires Apple Podcasts app running on macOS with manually downloaded podcast episodes to access TTML cache files.
+**Production Architecture**: AWS serverless (Lambda, S3, Step Functions, API Gateway, CloudFront)
+**Live URL**: https://d35sg48h6p3ej1.cloudfront.net
+**API Endpoint**: https://g5oco2erb4.execute-api.us-east-1.amazonaws.com/prod/
+
+**Archived**: Original Flask local application moved to `archive/flask-app/` (kept for reference only)
 
 ## Core Architecture
 
-### Local Flask Application
-
-**Entry point**: `app.py`
-
-The Flask app provides:
-- Web UI for uploading TTML files (templates/index.html, templates/result.html)
-- TTML transcript extraction via XML parsing
-- OpenAI GPT-3.5-turbo summarization with rate limiting and chunking
-- Background file monitoring (`monitor_ttml.py`) that auto-detects new TTML files in Apple Podcasts cache and uploads them
-
-Key functions in app.py:
-- `extract_transcript(ttml_content, include_timestamps)` - Parses TTML XML (namespace: `http://www.w3.org/ns/ttml`), extracts text from `<p>` and `<span>` elements
-- `summarize_transcript(transcript)` - Chunks transcript into 4000-char blocks, calls OpenAI API with exponential backoff retry logic (up to 8 retries, 60s max wait, 3s delay between chunks)
-- `/upload` - Web form endpoint accepting file uploads with optional timestamp inclusion
-- `/upload_api` - JSON API endpoint for programmatic uploads
-
-**Auto-monitoring**: app.py:17 spawns monitor_ttml.py as background subprocess, which watches `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML` and auto-uploads new .ttml files to the Flask API.
-
-### AWS Cloud Architecture
+### AWS Cloud Architecture (Production)
 
 **Directory**: `aws-cloud/podcast_stack/`
+**Status**: Production deployment, 100% serverless
 
 Serverless event-driven pipeline:
 1. Frontend requests presigned S3 URL from API Gateway
@@ -43,55 +28,27 @@ Serverless event-driven pipeline:
 6. Job status tracked in DynamoDB
 
 **CDK Stack**: `podcast_stack/podcast_stack_stack.py`
-- Two environments: dev and prod (detected via construct_id)
-- Dev: shorter lifecycles (7/30/90 days), smaller memory (256MB/512MB), auto-delete on destroy
-- Prod: longer lifecycles (30/90/180 days), more memory (512MB/1024MB), retain on destroy
+- Single production environment with production-grade configurations
+- S3 lifecycles: 30/90/180 days for uploads/transcripts/summaries
+- Lambda memory: 512MB (extract), 1024MB (summarize), 256MB (API handlers)
+- Removal policy: RETAIN (data preserved on stack deletion)
 
 **Lambda Functions**:
 - `lambda_functions/presign/` - Generates S3 presigned PUT URLs, creates DynamoDB job records
 - `lambda_functions/start_pipeline/` - Triggered by S3 uploads, starts Step Functions execution
-- `lambda_functions/extract_transcript/` - Ports app.py extraction logic, reads from S3, writes to S3/DynamoDB
-- `lambda_functions/summarize_transcript/` - Ports app.py summarization logic with OpenAI, writes to S3/DynamoDB
+- `lambda_functions/extract_transcript/` - Parses TTML XML, reads from S3, writes to S3/DynamoDB
+- `lambda_functions/summarize_transcript/` - Calls OpenAI API with rate limiting, writes to S3/DynamoDB
 - `lambda_functions/get_result/` - Queries DynamoDB, returns presigned GET URLs for results
+
+**Frontend**: Static HTML/JavaScript (`index.html` in project root)
+- Hosted on S3 bucket
+- Distributed via CloudFront CDN
+- Direct S3 uploads using presigned URLs
+- Real-time status polling
 
 ## Development Commands
 
-### Local Flask App
-
-**Setup**:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**Environment**: Create `.env` file with:
-```
-OPENAI_API_KEY=your_key_here
-```
-
-**Run**:
-```bash
-python app.py
-```
-Starts Flask on http://127.0.0.1:5000/
-
-**File monitoring** (runs automatically with app.py, but can run standalone):
-```bash
-python monitor_ttml.py
-```
-
-**Test OpenAI API connection**:
-```bash
-python tests/test_openAI_API.py
-```
-
-**View saved transcripts** (starts viewer Flask app on port 5000):
-```bash
-python viewer.py
-```
-
-### AWS Cloud Deployment
+### AWS Cloud Deployment (Primary)
 
 **Setup**:
 ```bash
@@ -104,7 +61,7 @@ pip install -r requirements.txt
 **Store secrets** (first time):
 ```bash
 aws secretsmanager create-secret \
-  --name podcast-app/openai-key-dev \
+  --name podcast-app/openai-key-prod \
   --secret-string '{"OPENAI_API_KEY":"your-key"}'
 ```
 
@@ -113,30 +70,38 @@ aws secretsmanager create-secret \
 cdk bootstrap aws://ACCOUNT-ID/REGION
 ```
 
-**Deploy dev**:
+**Deploy production**:
 ```bash
 cd aws-cloud/podcast_stack
-cdk deploy PodcastStackStack-dev
-```
-
-**Deploy prod**:
-```bash
 cdk deploy PodcastStackStack-prod
 ```
 
-**Destroy**:
+**View changes before deploying**:
 ```bash
-cdk destroy PodcastStackStack-dev
+cdk diff PodcastStackStack-prod
 ```
 
-**View diffs**:
-```bash
-cdk diff PodcastStackStack-dev
-```
-
-**Synthesize CloudFormation**:
+**Synthesize CloudFormation template**:
 ```bash
 cdk synth
+```
+
+**Destroy (with manual cleanup required)**:
+```bash
+cdk destroy PodcastStackStack-prod
+# Note: S3 buckets and DynamoDB tables are retained for safety
+# Delete them manually if needed
+```
+
+**Update frontend**:
+```bash
+# Edit index.html in project root
+# Upload to S3 via AWS console or CLI
+aws s3 cp index.html s3://BUCKET_NAME/index.html
+# Invalidate CloudFront cache
+aws cloudfront create-invalidation \
+  --distribution-id DISTRIBUTION_ID \
+  --paths "/*"
 ```
 
 ## Key Technical Details
@@ -147,7 +112,7 @@ cdk synth
 - Optional timestamps from `begin` attribute (formatted as HH:MM:SS)
 
 ### OpenAI Rate Limiting Strategy
-Both local and Lambda implementations use:
+Lambda implementations use:
 - 4000-character chunks
 - 3-second delays between initial requests
 - Exponential backoff: `min(60, 2^retry_count)` seconds
@@ -164,25 +129,26 @@ Both local and Lambda implementations use:
 
 ## Important Files
 
-**Local application**:
-- `app.py` - Main Flask application with transcript extraction and summarization
-- `monitor_ttml.py` - Watches Apple Podcasts TTML cache directory, auto-uploads to Flask API
-- `viewer.py` - Flask app to browse and download saved transcripts from `./transcripts/` directory
-- `clean_ttml.py` - Utility script for TTML file processing
-- `tests/test_openAI_API.py` - Simple OpenAI API connectivity test
-- `tests/database_cap_check.py` - Database capacity checking utility
-
-**AWS serverless**:
+**AWS serverless (production)**:
 - `aws-cloud/DEPLOYMENT.md` - Step-by-step AWS deployment guide
 - `aws-cloud/MIGRATION_SUMMARY.md` - Architecture comparison and migration details
-- `aws-cloud/podcast_stack/app.py` - CDK app entry point (defines dev/prod stacks)
-- `aws-cloud/podcast_stack/podcast_stack/podcast_stack_stack.py` - Infrastructure definition (S3, Lambda, Step Functions, DynamoDB, API Gateway)
+- `aws-cloud/podcast_stack/app.py` - CDK app entry point (defines production stack)
+- `aws-cloud/podcast_stack/podcast_stack/podcast_stack_stack.py` - Infrastructure definition (S3, Lambda, Step Functions, DynamoDB, API Gateway, CloudFront)
 - `aws-cloud/podcast_stack/lambda_functions/*/index.py` - Lambda function implementations
+- `index.html` - CloudFront-hosted frontend (project root)
+- `aws-test.html` - Testing utility for upload pipeline
+
+**Documentation**:
+- `README.md` - Main project documentation (cloud-first)
+- `DEPLOYMENT_GUIDE.md` - Complete AWS deployment instructions
+- `MIGRATION_COMPLETE.md` - Migration summary and history
+- `CLAUDE.md` - This file
+
+**Archived (reference only)**:
+- `archive/flask-app/` - Original Flask implementation (not for production)
+- `archive/flask-app/README.md` - Flask app documentation
 
 ## Environment Variables
-
-### Local Flask
-- `OPENAI_API_KEY` - Required, from .env file
 
 ### AWS Lambda
 - `STORAGE_BUCKET` - S3 bucket name (set by CDK)
@@ -191,53 +157,71 @@ Both local and Lambda implementations use:
 - `STATE_MACHINE_ARN` - Step Functions ARN (set by CDK, starter Lambda only)
 - `BUCKET_NAME` - Duplicate of STORAGE_BUCKET (starter Lambda only)
 
+### Local Development (Archived)
+- `.env` file no longer used for production
+- See `archive/flask-app/README.md` for Flask-specific env setup
+
 ## Testing
 
-### Local Flask App
-**Web UI**: Navigate to http://127.0.0.1:5000/ and upload a TTML file
-
-**API endpoint**:
-```bash
-curl -X POST http://127.0.0.1:5000/upload_api \
-  -F "file=@path/to/file.ttml"
-```
-
-**Verify OpenAI API**:
-```bash
-python tests/test_openAI_API.py
-```
-
-### AWS Cloud
+### AWS Cloud (Production)
 See aws-cloud/DEPLOYMENT.md "Testing" section for presigned URL workflow and API endpoint testing with curl.
+
+**Quick test**:
+1. Open https://d35sg48h6p3ej1.cloudfront.net
+2. Upload a TTML file
+3. Monitor Step Functions execution in AWS console
+4. Check CloudWatch logs for debugging
+
+**API testing**:
+```bash
+# Get presigned URL
+curl -X POST https://g5oco2erb4.execute-api.us-east-1.amazonaws.com/prod/presign \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "test.ttml"}'
+
+# Check job status
+curl "https://g5oco2erb4.execute-api.us-east-1.amazonaws.com/prod/result?jobId=YOUR_JOB_ID"
+```
+
+**Browser testing**:
+Open `aws-test.html` in browser to test full pipeline.
 
 ## Project Directory Structure
 
 ```
 .
-├── app.py                    # Main Flask app
-├── monitor_ttml.py           # TTML file watcher
-├── viewer.py                 # Transcript viewer app
-├── clean_ttml.py             # TTML processing utility
-├── requirements.txt          # Python dependencies for local app
-├── templates/                # Flask HTML templates
-├── uploads/                  # Uploaded TTML files
-├── transcripts/              # Processed transcripts and summaries
-├── cache/                    # JSON cache files
-├── tests/                    # Test scripts
-├── .env                      # Environment variables (create this, not in git)
-└── aws-cloud/                # AWS serverless implementation
-    ├── DEPLOYMENT.md         # AWS deployment instructions
-    ├── MIGRATION_SUMMARY.md  # Architecture comparison
-    └── podcast_stack/        # CDK project
-        ├── app.py            # CDK app entry point
-        ├── requirements.txt  # CDK Python dependencies
-        ├── lambda_functions/ # Lambda function code
+├── README.md                     # Main documentation (cloud-first)
+├── DEPLOYMENT_GUIDE.md           # AWS deployment instructions
+├── MIGRATION_COMPLETE.md         # Migration summary
+├── CLAUDE.md                     # This file
+├── index.html                    # CloudFront-hosted frontend
+├── aws-test.html                 # Testing utility
+├── env.example                   # Environment template
+├── requirements.txt              # Minimal AWS CLI/CDK requirements
+├── .gitignore                    # Git ignore rules
+├── archive/                      # Archived Flask implementation
+│   └── flask-app/                # Original local application
+│       ├── README.md             # Flask documentation
+│       ├── app.py                # Main Flask app
+│       ├── monitor_ttml.py       # TTML file watcher
+│       ├── viewer.py             # Transcript viewer
+│       ├── clean_ttml.py         # TTML utility
+│       ├── templates/            # Flask HTML templates
+│       ├── tests/                # Test scripts
+│       └── flask-requirements.txt # Flask dependencies
+└── aws-cloud/                    # AWS serverless (production)
+    ├── DEPLOYMENT.md             # Deployment guide
+    ├── MIGRATION_SUMMARY.md      # Architecture comparison
+    └── podcast_stack/            # CDK project
+        ├── app.py                # CDK entry point
+        ├── requirements.txt      # CDK dependencies
+        ├── lambda_functions/     # Lambda source code
         │   ├── presign/
         │   ├── start_pipeline/
         │   ├── extract_transcript/
         │   ├── summarize_transcript/
         │   └── get_result/
-        └── podcast_stack/    # CDK stack definitions
+        └── podcast_stack/        # CDK stack definitions
             └── podcast_stack_stack.py
 ```
 
@@ -275,28 +259,125 @@ Use `aws-test.html` (in project root) to test the full upload → extract → su
 
 - Current branch: `migration/aws-cloud`
 - Main branch: `main`
-- Status: AWS migration complete and deployed to dev environment
-- Production: Local Flask app (app.py) remains the active implementation
+- Status: AWS serverless deployment complete and running in production
+- Production URL: https://d35sg48h6p3ej1.cloudfront.net
+- API: https://g5oco2erb4.execute-api.us-east-1.amazonaws.com/prod/
+- Local Flask app: Archived to `archive/flask-app/` (reference only)
 
 ## Common Workflows
 
-**Quick start for local development**:
-```bash
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-echo "OPENAI_API_KEY=your_key" > .env
-python app.py
-```
-
-**Deploy AWS dev environment**:
+**Deploy to AWS production**:
 ```bash
 cd aws-cloud/podcast_stack
 source .venv/bin/activate
-cdk deploy PodcastStackStack-dev
+cdk deploy PodcastStackStack-prod
 ```
 
-**View saved transcripts locally**:
+**Update frontend**:
 ```bash
-python viewer.py
-# Navigate to http://127.0.0.1:5000/
+# Edit index.html in project root
+aws s3 cp index.html s3://BUCKET_NAME/index.html
+aws cloudfront create-invalidation --distribution-id ID --paths "/*"
 ```
+
+**Monitor production**:
+```bash
+# View Lambda logs
+aws logs tail /aws/lambda/PodcastStack-prod-extract-transcript --follow
+
+# View Step Functions executions
+aws stepfunctions list-executions --state-machine-arn ARN
+
+# Query DynamoDB
+aws dynamodb scan --table-name PodcastStackStack-prod-jobs
+```
+
+**Update Lambda function code**:
+```bash
+cd aws-cloud/podcast_stack
+# Edit lambda_functions/*/index.py
+cdk deploy PodcastStackStack-prod
+```
+
+**Test locally before deploying**:
+```bash
+cdk synth PodcastStackStack-prod
+cdk diff PodcastStackStack-prod
+```
+
+---
+
+## Archived: Local Flask Application
+
+**IMPORTANT**: This section documents the archived Flask implementation. It is NOT used in production.
+
+**Location**: `archive/flask-app/`
+**Status**: Archived November 15, 2025
+**Use**: Reference and local testing only
+
+### When to Use Archived Flask App
+
+Only use the Flask app for:
+- Understanding original implementation logic
+- Local development without AWS costs
+- Testing TTML parsing offline
+- Educational purposes
+
+**Do NOT use for**:
+- Production deployments
+- Scalable processing
+- Public-facing applications
+- Multi-user scenarios
+
+### Flask App Overview
+
+**Entry point**: `archive/flask-app/app.py`
+
+The Flask app provided:
+- Web UI for uploading TTML files (templates/index.html, templates/result.html)
+- TTML transcript extraction via XML parsing
+- OpenAI GPT-3.5-turbo summarization with rate limiting and chunking
+- Background file monitoring (`monitor_ttml.py`) that auto-detects new TTML files in Apple Podcasts cache and uploads them
+
+Key functions in app.py:
+- `extract_transcript(ttml_content, include_timestamps)` - Parses TTML XML (namespace: `http://www.w3.org/ns/ttml`), extracts text from `<p>` and `<span>` elements
+- `summarize_transcript(transcript)` - Chunks transcript into 4000-char blocks, calls OpenAI API with exponential backoff retry logic (up to 8 retries, 60s max wait, 3s delay between chunks)
+- `/upload` - Web form endpoint accepting file uploads with optional timestamp inclusion
+- `/upload_api` - JSON API endpoint for programmatic uploads
+
+**Auto-monitoring**: app.py:17 spawned monitor_ttml.py as background subprocess, which watched `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML` and auto-uploaded new .ttml files to the Flask API.
+
+### Running Flask App (Archived)
+
+**See `archive/flask-app/README.md` for complete instructions.**
+
+Quick reference:
+```bash
+cd archive/flask-app
+python3 -m venv venv
+source venv/bin/activate
+pip install -r flask-requirements.txt
+# Create .env in project root with OPENAI_API_KEY
+python app.py
+# Access at http://127.0.0.1:5000/
+```
+
+### Flask App Limitations
+
+- Requires macOS with Apple Podcasts app for auto-monitoring
+- Single-threaded, no scalability
+- Local storage only (no cloud backup)
+- Manual file management
+- No global distribution
+- No job tracking/persistence
+
+### Migration Notes
+
+Flask code was migrated to Lambda functions:
+- `app.py:extract_transcript()` → `lambda_functions/extract_transcript/index.py`
+- `app.py:summarize_transcript()` → `lambda_functions/summarize_transcript/index.py`
+- Flask templates → `index.html` (CloudFront static site)
+- Local file storage → S3 buckets
+- No database → DynamoDB job tracking
+
+See `MIGRATION_COMPLETE.md` for detailed migration history.
